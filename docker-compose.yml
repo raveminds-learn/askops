@@ -1,0 +1,65 @@
+version: "3.8"
+
+services:
+
+  # ── n8n — visual data pipeline ──────────────────────────────────
+  n8n:
+    image: n8nio/n8n:latest
+    container_name: askops-n8n
+    ports:
+      - "5678:5678"
+    environment:
+      - N8N_BASIC_AUTH_ACTIVE=false
+      - N8N_HOST=localhost
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=http
+      - NODE_ENV=production
+      - WEBHOOK_URL=http://localhost:5678/
+    volumes:
+      - n8n_data:/home/node/.n8n
+    restart: unless-stopped
+
+  # ── Langfuse — AI tracing ────────────────────────────────────────
+  langfuse:
+    image: langfuse/langfuse:latest
+    container_name: askops-langfuse
+    ports:
+      - "3000:3000"
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/langfuse
+      - NEXTAUTH_SECRET=askops-secret-change-in-prod
+      - NEXTAUTH_URL=http://localhost:3000
+      - SALT=askops-salt
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ── PostgreSQL — Langfuse + audit log ───────────────────────────
+  postgres:
+    image: postgres:15-alpine
+    container_name: askops-postgres
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=langfuse
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # ── Redis — caching + session ────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: askops-redis
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+
+volumes:
+  n8n_data:
+  pg_data:

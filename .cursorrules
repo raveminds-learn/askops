@@ -1,0 +1,46 @@
+# AskOps — Cursor Rules
+# These rules apply to every file Cursor generates in this project.
+
+## Project
+AskOps by AskOps by RaveMinds
+Build-in-public LinkedIn project — zero cost, all open source.
+
+## Stack
+- Python 3.11
+- Mistral 7B via Ollama (local LLM — never use OpenAI)
+- LangGraph for agent orchestration
+- MCP (Model Context Protocol) for tool connectivity
+- LanceDB for vector storage (local, embedded)
+- n8n for data pipelines (Docker)
+- Langfuse for AI tracing (Docker)
+- FastAPI for API gateway
+- Slack Bolt for bot interface
+- Redis for caching
+- Docker Compose for all services
+
+## Non-negotiable rules
+- NEVER use OpenAI, Anthropic, or any paid LLM API
+- NEVER hardcode secrets — always use python-dotenv
+- All data sources are mocked in mock_data.py
+- One file = one responsibility
+- Every function has a docstring
+- Use Pydantic for all request/response models
+- Use structlog for all logging — never use print()
+- Type hints on every function signature
+- Handle errors gracefully — never let exceptions crash the bot
+
+## Trade IDs for mock data
+12345 = Trade Failure (settlement timeout)
+22222 = Duplicate Trade
+33333 = System Outage
+44444 = Slow Settlement (SLA breach)
+55555 = Risk Engine Rejection
+
+## File responsibilities
+mock_data.py          — all mock data, never modified by other files
+storage/lancedb_store.py — LanceDB read/write only
+ingestion/ingest.py   — populates LanceDB from mock_data
+mcp_servers/*.py      — one MCP server per data source
+agent/graph.py        — LangGraph agent, calls MCP tools
+api/main.py           — FastAPI, calls agent only
+bot/slack_bot.py      — Slack Bolt, calls API only
