@@ -1,0 +1,72 @@
+AskOps — Flow Overview & File Map
+=================================
+
+End-to-end: User asks in Slack → Slack bot → FastAPI → LangGraph agent → Data (mock + LanceDB) → Ollama LLM → Answer back to Slack.
+
+--------------------------------------------------------------------------------
+1. Slack → Bot
+--------------------------------------------------------------------------------
+  bot/slack_bot.py
+    - Listens for DMs and @mentions; strips Slack user IDs; posts
+      "Trade X found, analyzing..." then calls API (streaming or normal);
+      renders business view + Manager / Technical / Full Report buttons;
+      handles button clicks and calls API again for that view.
+
+--------------------------------------------------------------------------------
+2. HTTP API
+--------------------------------------------------------------------------------
+  api/main.py
+    - FastAPI app. POST /ask: strips mentions, calls agent, returns
+      business/manager/technical/full + trade_id. POST /ask/stream: SSE
+      stream with progress then full result.
+
+--------------------------------------------------------------------------------
+3. Agent (orchestration + LLM)
+--------------------------------------------------------------------------------
+  agent/graph.py
+    - LangGraph: regex trade-id → data_collector (mock + LanceDB) →
+      one combined LLM call for business + manager + technical; full =
+      concat. Uses Ollama (Mistral).
+
+--------------------------------------------------------------------------------
+4. Data
+--------------------------------------------------------------------------------
+  mock_data.py
+    - Trade context: Oracle, Datadog, Kafka, EKS, manager summary (by trade_id).
+
+  storage/lancedb_store.py
+    - LanceDB + Ollama embeddings (nomic-embed-text): ingest logs,
+      semantic search by query/trade_id.
+
+  ingestion/ingest.py
+    - One-time: loads mock logs from mock_data.py into LanceDB.
+
+--------------------------------------------------------------------------------
+5. MCP (tool layer; demo uses mock, not live MCP)
+--------------------------------------------------------------------------------
+  mcp_servers/datadog_mcp.py   - MCP server: tools for Datadog alerts/logs (demo uses mock_data).
+  mcp_servers/oracle_mcp.py    - Trade lifecycle (demo: mock).
+  mcp_servers/kafka_mcp.py     - Consumer lag (demo: mock).
+  mcp_servers/eks_mcp.py       - Pod status (demo: mock).
+
+--------------------------------------------------------------------------------
+6. Infra & config
+--------------------------------------------------------------------------------
+  docker-compose.yml   - n8n, Langfuse, Postgres, Redis.
+  .env / .env.template - Slack tokens, Ollama URL, API URL, Langfuse, Redis.
+  setup.bat            - Docker, Ollama, venv, pip, .env, compose up, ingest.
+  start.bat / stop.bat - Start/stop API + bot (and Docker).
+  start_api.bat / start_bot.bat - Run API or bot only.
+
+--------------------------------------------------------------------------------
+7. Testing (no Slack)
+--------------------------------------------------------------------------------
+  test_demo.py
+    - Runs the same agent (agent.graph.ask) for the 5 demo questions
+      in the terminal; no Slack or HTTP.
+
+--------------------------------------------------------------------------------
+One-line flow
+--------------------------------------------------------------------------------
+Slack event → slack_bot.py → api/main.py → agent/graph.py (mock_data +
+lancedb_store) → Ollama → formatted answer back to Slack.
