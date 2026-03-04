@@ -42,12 +42,29 @@ End-to-end: User asks in Slack → Slack bot → FastAPI → LangGraph agent →
     - One-time: loads mock logs from mock_data.py into LanceDB.
 
 --------------------------------------------------------------------------------
-5. MCP (tool layer; demo uses mock, not live MCP)
+5. MCP (tool layer) — NOT in the current code flow
 --------------------------------------------------------------------------------
-  mcp_servers/datadog_mcp.py   - MCP server: tools for Datadog alerts/logs (demo uses mock_data).
-  mcp_servers/oracle_mcp.py    - Trade lifecycle (demo: mock).
-  mcp_servers/kafka_mcp.py     - Consumer lag (demo: mock).
-  mcp_servers/eks_mcp.py       - Pod status (demo: mock).
+  mcp_servers/datadog_mcp.py   - MCP server: tools for Datadog alerts/logs.
+  mcp_servers/oracle_mcp.py    - MCP server: trade lifecycle (uses mock_data).
+  mcp_servers/kafka_mcp.py     - MCP server: consumer lag.
+  mcp_servers/eks_mcp.py       - MCP server: EKS pod status.
+
+  Where MCP is integrated:
+    - Only inside mcp_servers/*.py. Each file is a standalone MCP server
+      (mcp.server.Server + stdio_server). They expose tools (e.g. get_trade_lifecycle,
+      get_alerts, get_consumer_lag, get_pod_status) and are meant to be run as
+      separate processes and talked to by an MCP client over stdio.
+
+  Where MCP is NOT integrated:
+    - api/main.py, agent/graph.py, and bot/slack_bot.py do NOT import or call
+      any MCP server or MCP client. The agent gets all data from mock_data.py
+      (get_trade_context) and storage/lancedb_store.py (search). So the live
+      flow is: Slack → bot → API → agent → mock_data + LanceDB → Ollama.
+      MCP servers are unused in that path.
+
+  To use MCP in the flow you would: run the MCP servers as subprocesses (or
+  remote), add an MCP client in the agent (or a tool layer), and have the
+  agent call MCP tools instead of (or in addition to) get_trade_context.
 
 --------------------------------------------------------------------------------
 6. Infra & config

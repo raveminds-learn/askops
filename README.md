@@ -1,7 +1,7 @@
 # AskOps by RaveMinds
 
 > **Ask your infrastructure anything — in plain English, inside Slack.**
-> Built with Mistral 7B, LangGraph, MCP, LanceDB, n8n, Langfuse. Zero cloud cost.
+> Built with Mistral 7B, LangGraph, LanceDB. Optional: MCP servers, n8n, Langfuse (in repo/Docker; not in the live flow). Zero cloud cost.
 
 ---
 
@@ -94,27 +94,26 @@ python test_demo.py    # Terminal 3 — test without Slack
 
 ## Architecture
 
+**Actual flow (what runs when you ask in Slack):**
+
 ```
 Slack
   ↓
-FastAPI :8001
+Slack Bolt bot  →  FastAPI :8001
   ↓
-LangGraph Agent — Mistral 7B via Ollama
-  ├── Supervisor  (classifies intent, extracts trade_id)
-  ├── Specialist  (calls all 4 data sources)
-  └── Formatter   (plain English answer)
-       ↓ MCP Protocol
-  ├── datadog_mcp.py  — alerts + logs
-  ├── oracle_mcp.py   — trade lifecycle
-  ├── kafka_mcp.py    — consumer lag
-  └── eks_mcp.py      — pod status
-       ↓ historical context
-  LanceDB (local vector store)
-       ↓ fed by
-  n8n  → http://localhost:5678
-       ↓ traced by
-  Langfuse → http://localhost:3000
+LangGraph agent (agent/graph.py)
+  ├── Regex trade_id extraction (no LLM)
+  ├── data_collector node
+  │     ├── mock_data.get_trade_context(trade_id)  → Oracle, Datadog, Kafka, EKS, manager summary
+  │     └── LanceDB semantic search (historical context)
+  └── combined_views node  →  one Ollama (Mistral) call  →  business + manager + technical
+  ↓
+Answer back to Slack
 ```
+
+**Optional / not in the live flow:**
+- **MCP servers** (mcp_servers/*.py) — present in repo; would need an MCP client in the agent to be used.
+- **LanceDB** is populated by `ingestion/ingest.py` (mock logs); **n8n** and **Langfuse** are in Docker for pipelines and tracing if you wire them up.
 
 ---
 
@@ -134,15 +133,13 @@ LangGraph Agent — Mistral 7B via Ollama
 | Tool | Role |
 |---|---|
 | Mistral 7B + Ollama | Local LLM |
-| LangGraph | Multi-agent orchestration |
-| MCP | Standardised tool connectivity |
-| LanceDB | Local vector store |
-| sentence-transformers | Local embeddings |
-| n8n | Visual data pipelines |
-| Langfuse | AI tracing |
+| LangGraph | Agent graph (data_collector → combined_views) |
+| mock_data + LanceDB | Trade context + historical search (demo) |
 | FastAPI | REST gateway |
 | Slack Bolt | Bot interface |
-| Docker | Service management |
+| Docker | n8n, Langfuse, Postgres, Redis (optional) |
+
+*MCP servers and n8n are in the repo/Docker but not called by the current flow.*
 
 **Total cost: $0**
 
